@@ -1,0 +1,43 @@
+arch/$(SRCARCH)/kernel/vmlinux.lds 中第一个出现的段是 .head.text
+对应 aarch64,使用这个段的文件是 arch/arm64/kernel/head.S
+
+arch/arm64/kernel/head.S 中第一句是 b stext 无条件跳转
+
+
+ENTRY(stext)
+    bl    preserve_boot_args
+    bl    el2_setup            // Drop to EL1, w0=cpu_boot_mode
+    adrp    x23, __PHYS_OFFSET
+    and    x23, x23, MIN_KIMG_ALIGN - 1    // KASLR offset, defaults to 0
+    bl    set_cpu_boot_mode_flag
+    bl    __create_page_tables
+    /*
+     * The following calls CPU setup code, see arch/arm64/mm/proc.S for
+     * details.
+     * On return, the CPU will be ready for the MMU to be turned on and
+     * the TCR will have been set.
+     */
+    bl    __cpu_setup            // initialise processor
+    b    __primary_switch
+ENDPROC(stext)
+
+
+根据 kernel boot协议，传递给 kernle的参数应当存放在x0-x3中，x0中存放的是 设备树dtb在内存中的物理地址（x1-x3暂时保留）
+preserve_boot_args 函数就是将 x0-x3 存放在 boot_args 地址处(boot_args应当是一个数组)
+下面的 stp/ldp 是 str/ldr 的批量版本
+
+preserve_boot_args:
+    mov    x21, x0              // x21=FDT
+
+    adr_l    x0, boot_args	// record the contents of
+    stp    x21, x1, [x0]	// x0 .. x3 at kernel entry
+    stp    x2, x3, [x0, #16]	// x21 + x1 = 64*2bit = 8*8*2bit=16byte
+
+    dmb    sy           // needed before dc ivac with
+                        // MMU off. dmb 是 data memory barrior 的缩写
+
+    mov    x1, #0x20            // 4 x 8 bytes
+    b    __inval_dcache_area        // tail call
+ENDPROC(preserve_boot_args)
+
+

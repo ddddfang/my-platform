@@ -1,0 +1,60 @@
+# 这些寄存器,r0 应该是32bit的,x0是64bit的
+
+
+        mrs x0, mpidr_el1       # mrs 加载系统寄存器内容到通用寄存器 x0-x30
+
+        msr hcr_el2, x0         # msr 存储x0寄存器内容 到 hcr_el2 系统寄存器
+
+el1_entry:
+	adr x0, el1_entry       # adr 加载一个 label 对应的相对地址到目标寄存器(小范围地址读取,拿到的是相对pc的偏移)
+
+        ldr x0, =SCTLR_VALUE_MMU_DISABLED       #加载一个立即数到目标寄存器(这是一个伪指令)
+        ldr r0, =_start         # 取得某标号的绝对地址(link时候确定的)占用两个32bit,一个是指令一个是目标地址
+        ldr r0, _start          # 从内存地址 _start 的地方把值读入
+        ldr r0, 0x12345678      # 把0x12345678这个地址中的值存放到r0中
+
+	ldr w0, [x0], #8        # 加载到寄存器(from x0指向的内存),完成后 x0 增加8
+	str w1, [x0], #8        # 存储到内存(from 寄存器),完成后 x0 增加8
+	ldr w0, [x0, #8]        # 加载到寄存器(from x0+8指向的内存)
+	str w1, [x0, #8]        # 存储到内存(from 寄存器)
+
+	mov sp, #LOW_MEMORY     # mov 寄存器之间的值复制 或 将立即数复制到寄存器(有长度限制,不如ldr伪指令功能强)
+	bl memzero              # bl 存储返回地址并跳转,branch with link
+	lsr x0, x0, #2          # lsr 逻辑右移，空出的位用0填充
+
+	cbz x0, master          # 比较,当值为0时跳转, compare, branch if zero
+        eret    #中断返回指令,相对于普通的返回,除了会跳转到 ELR_ELx 存储的地址外还会恢复状态寄存器(存储在 SPSR_ELx 中)
+
+        #ldm, stm, push, pop     # 32位指令,在64位中不存在. ldm, stm本来的作用是批量出栈进栈.
+        #LDMFD SP!, {R0, R1, R2}   //加载到寄存器,从sp指向的内存地址
+        #STMFD SP!, {R0}           //存储到sp指向的内存
+
+        stp x29, x30, [sp, #0xfffffff0]!        #store到内存(sp+0xfffffff0指向的内存,! 指示完成后将sp+0xfffffff0存入sp)
+        ldp x29, x30, [sp], #0x10               #将sp指向的内存加载到寄存器 x29 & x30, 操作完成后 sp会增加16B
+
+
+#  mpidr_el1, 
+        multi-processor ID 系统寄存器, 状态寄存器搬运到普通寄存器只能通过 mrs(Move to Register from State register)指令
+        (Page 2619 of AArch64-Reference-Manual.)
+#  sctlr_el1, 
+        exception level1 下的 系统控制寄存器,控制el0和el1下的系统行为 (page2654 in aarch64.pdf)
+        包括 mmu的开关(boot阶段要关闭),指令cache,数据cache(简单起见可以都关闭),大小端选择(通常选择小端)
+#  hcr_el2, 
+        Hypervisor(管理程序,和虚拟化相关) Configuration Register,
+        其中有一个控制 el2 & el1 & el0执行状态的 bit,aarch64/aarch32, 我们需要使用 aarch64
+        (Page 2487 of AArch64-Reference-Manual.)
+#  SCR_EL3, 
+        Secure Configuration Register,控制更低level处于 secure/non-secure 模式,
+        我们会控制 el0 & el1 处于 aarch64下的 non-secure
+        (Page 2643 of AArch64-Reference-Manual.)
+#  SPSR_EL3, 
+        Saved Program Status Register(这个el帮别人保存的) 包含各种flags,中断enable/disable,
+        中断返回的时候,我们通过修改此寄存器屏蔽 FIQ & IRQ & SError中断
+        并且我们会在 eret 指令返回的时候返回 el1
+        (Page 389 of AArch64-Reference-Manual.)
+#  ELR_EL3, 
+        Exception Link Register (EL3), eret 执行后会跳转到此寄存器指定的地址
+        Page 351 of AArch64-Reference-Manual.
+
+
+#  xzr, 专门存放 zero 的寄存器

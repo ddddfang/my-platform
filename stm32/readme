@@ -1,0 +1,32 @@
+
+关于三种启动方式
+https://blog.csdn.net/wwt18811707971/article/details/78678059
+
+串口刷机
+https://github.com/ARMinARM/stm32flash
+
+
+关于 newlib, 为嵌入式提供了printf/malloc&free等函数
+https://www.xuebuyuan.com/1235386.html
+
+mdk帮我们包含了很多stm32f10x.h cortex-m3.h等头文件,在ubuntu下使用libopencm3来完成同样的功能
+
+
+
+讲的一个stm32 thread实现
+http://01ketang.cc/docs/diyrtos/basic/front-end-coding/
+
+
+关于Pend svc, svc是系统服务调用isr,可以通过指令触发.pend svc就是说此指令可能缓期执行,一直缓到其他终端处理完毕
+在tTaskSwitch()只是设置了PendSVC挂起。如果当前中断被关闭，这个挂起请求不会丢失，其会在中断开启时立即响应
+https://mbb.eet-china.com/forum/topic/77715_1_1.html
+
+
+
+
+STMDB Rx!, {Rm-Rn}
+-- 将Rm-Rn之间的一堆寄存器写到Rx中地址对应的内存处。每写一个单元前，地址先自减4再写，先写Rm,最后写Rn。写完后将最后的地址保存到Rx寄存器中。
+-- stmdb: STore to Memory, Desrease Before operation
+
+
+

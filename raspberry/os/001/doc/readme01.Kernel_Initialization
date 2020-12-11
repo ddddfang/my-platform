@@ -1,0 +1,207 @@
+https://github.com/s-matyukevich/raspberry-pi-os
+
+
+################ 001 最基本的一个demo,启动串口打印 hello world, 并返回输入的字符
+
+#ubuntu 下安装 putty，直接 sudo apt-get install putty
+#查看使用的串口 dmesg |grep tty，对应的设备就是 ls /dev/tty*
+#然后打开putty，sudo putty(非root用户可能会连接不上串口)，/dev/ttyUSB0，115200
+
+
+#  1.1.注意config.txt要使用 src 下的那个,内容为:
+#  
+#  kernel_old=1                #指示gpu加载 kernel8.img 到地址0处
+#  disable_commandline_tags=1  #指示gpu不用传递命令行参数到 booted image
+#  
+#  代码以 src/boot.S 为起点进行分析
+#  
+#  1.2.几个arm汇编指令:
+#  mrs 加载系统寄存器内容到通用寄存器x0-x30
+#  adr 加载一个label的相对地址到目标寄存器
+#  ldr x0, =SCTLR_VALUE_MMU_DISABLED  加载一个立即数到目标寄存器
+#  mov 寄存器之间的值复制 或 将立即数复制到寄存器
+#  bl 存储返回地址并跳转,branch with link
+#  lsr 逻辑右移，空出的位用0填充
+#  cbz 比较,当值为0时跳转,compare, branch if zero
+#  eret 中断返回指令,相对于普通的返回,除了会跳转到 ELR_ELx 存储的地址外还会恢复状态寄存器(存储在 SPSR_ELx 中)
+#
+#  processor ID 存储在 mpidr_el1 系统寄存器中, 状态寄存器搬运到普通寄存器只能通过 mrs(Move to Register from State register)指令
+#  sctlr_el1 exception level1 下的 系统控制寄存器
+#  
+#  1.3.BCM2837
+#  BCM2837 是 树莓派3b使用的 soc
+#  它的地址空间 >= 0x3F000000 是为 devices 预留的(虚拟内存没有启用之前,外设基地址就是这个),
+#  BCM2837-ARM-Peripherals.V2-1.pdf 1.2.3节有说明
+#  手册中描述外设地址都是 0x7exx_xxxx, 这是 bus address,
+#  以软件直接访问外设的话,都需要转为 0x3fxx_xxxx
+#  
+#  
+#  关于 BCM2837 首先需要了解的是两个外设:
+#      miniUART, 在 BCM2837-ARM-Peripherals.V2-1.pdf page8 有讲述
+#          树莓派有两个 UART: Mini UART and PL011 UART
+#      GPIO
+
+
+
+################ 002 linux kernel 概述
+
+arch 
+    包含很多子目录,每个处理器架构对应一个目录, arm v8处理器对应的是 arm64/
+init
+    架构相关的代码, boot kernel 后程序执行到 start_kernel 函数,负责一些common的kernel初始化
+kernel 
+    linux的核心,绝大多数kernel子系统都在这里实现
+mm
+    包含所有和 memory management 相关的数据结构和函数
+drivers 
+    最庞大的一个目录,设备驱动程序
+fs 
+    包含不同类型的文件系统
+
+#  linux 使用 makefile 构建, 这套系统称为 kbuild 系统: 通过 Kconfig 定制编译过程
+#  Kconfig 通过 makefile 实现,但不属于标准 make 的一部分,
+#  Kconfig 定义的变量会暴露给 kernel source code 和 嵌套的 makefile
+#  Kconfig 中的变量值可通过 make menuconfig 配置(并被存储到 .config 文件中)
+
+#  linux 使用递归编译,每个子目录都可以定义自己的 Makefile 和 KConfig,
+#  大部分的 makefile 都只需指定编译哪些 object:
+#      obj-$(SOME_CONFIG_VARIABLE) += some_file.o
+#  这个定义表示当 SOME_CONFIG_VARIABLE 值为 y 时, some_file.c 将被编译进入内核,无条件编译就是
+#      obj-y += some_file.o
+
+
+#  linux 会在 makefile中添加一些优化,保证当配置改变的时候也能触发make的执行
+#  首先 FORCE 保证每次make都执行 $(call if_changed,compile),
+#  然后 if_changed 函数会检测是否执行 compile, 若需要执行,则执行 (cmd_compile)
+
+cmd_compile = gcc $(flags) -o $@ $<
+
+%.o: %.c FORCE
+    $(call if_changed,compile)
+
+###### 以下分析一下 linux 的 Makefile,最详细的最权威的:
+# https://github.com/torvalds/linux/blob/v4.14/Documentation/kbuild/makefiles.txt
+
+#  vmlinux 是 linux Makefile的默认 target
+cmd_link-vmlinux =                                              \
+    $(CONFIG_SHELL) $< $(LD) $(LDFLAGS) $(LDFLAGS_vmlinux) ;    \   #执行 scripts/link-vmlinux.sh 下面介绍
+    $(if $(ARCH_POSTLINK), $(MAKE) -f $(ARCH_POSTLINK) $@, true)    #执行 postlink script(不关心)
+
+vmlinux: scripts/link-vmlinux.sh vmlinux_prereq $(vmlinux-deps) FORCE   #$(vmlinux-deps) 下面介绍
+    +$(call if_changed,link-vmlinux)
+
+#  cmd_link-vmlinux 的第一行 scripts/link-vmlinux.sh 被执行的时候假定所有的object都已构建完毕
+#  (且存放在 KBUILD_VMLINUX_INIT, KBUILD_VMLINUX_MAIN, KBUILD_VMLINUX_LIBS 三个地方),
+#  1.  首先 archive_builtin 执行,生成 thin archive 两个target，并被存储在 build-in.o
+#  2.  然后 modpost_link 执行, 调用 linker 并生成 vmlinux.o,紧接着 
+#      ${MAKE} -f "${srctree}/scripts/Makefile.modpost" vmlinux.o 进行section mismatch的分析
+#  3.  然后 kallsyms 生成 kernel symbol table, 使用nm工具从 vmlinux binary 中提取符号表
+#      并使用 scripts/kallsyms 工具去生成 包含所有符号信息的 可被linux kernel解析的 特殊格式的汇编文件(这个文件会被编译进 vmlinux)
+#  4.  生成最终的 vmlinux binary 和 System.map
+#  scripts/link-vmlinux.sh 使用连接脚本就是顶层 Makefile 中定义的 KBUILD_LDS
+
+
+#  关于上面 vmlinux 的依赖之一, $(vmlinux-deps), 首先定义所有的子目录
+init-y        := init/
+drivers-y    := drivers/ sound/ firmware/
+net-y        := net/
+libs-y        := lib/
+core-y        := usr/
+core-y        += kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/
+
+#  所有子目录得到对应的 xxx/built-in.o,相当于每个子目录生成一个 build-in.o
+init-y        := $(patsubst %/, %/built-in.o, $(init-y))
+core-y        := $(patsubst %/, %/built-in.o, $(core-y))
+drivers-y    := $(patsubst %/, %/built-in.o, $(drivers-y))
+net-y        := $(patsubst %/, %/built-in.o, $(net-y))
+
+export KBUILD_VMLINUX_INIT := $(head-y) $(init-y)
+export KBUILD_VMLINUX_MAIN := $(core-y) $(libs-y2) $(drivers-y) $(net-y) $(virt-y)
+export KBUILD_VMLINUX_LIBS := $(libs-y1)
+export KBUILD_LDS          := arch/$(SRCARCH)/kernel/vmlinux.lds    # 这个是 linux 的连接脚本
+
+vmlinux-deps := $(KBUILD_LDS) $(KBUILD_VMLINUX_INIT) $(KBUILD_VMLINUX_MAIN) $(KBUILD_VMLINUX_LIBS)
+
+#  告诉make vmlinux-deps 依赖 vmlinux-dirs
+#  vmlinux-dirs 是去掉了目录名后的/
+$(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
+
+vmlinux-dirs    := $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
+    $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
+    $(net-y) $(net-m) $(libs-y) $(libs-m) $(virt-y)))
+
+build := -f $(srctree)/scripts/Makefile.build obj               #Copied from `scripts/Kbuild.include`
+
+#  vmlinux-dirs 又会触发一系列动作
+$(vmlinux-dirs): prepare scripts
+    #最终这句话会被转化为 make -f scripts/Makefile.build obj=drivers (以 drivers 为例)
+    #调用 scripts/Makefile.build 并向其传递了obj变量
+    $(Q)$(MAKE) $(build)=$@
+
+
+#  上面实际调用到了 scripts/Makefile.build, 这个脚本首先会包含对应目录下的
+#  Makefile和Kconfig(就是将其中的变量包含了进来),eg:
+#  obj-y: 当前目录下所有 source code file 组成的list
+#  subdir-y: 包含所有需要在编译当前模块前被访问的子目录
+
+#  (以上两个变量就是嵌套的Makefile负责初始化的)
+
+#  除了包进来一些变量外,scripts/Makefile.build 还会执行 __build (这是此 Makefile的第一个伪目标)
+__build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(lib-target) $(extra-y)) $(if $(KBUILD_MODULES),$(obj-m) $(modorder-target)) $(subdir-ym) $(always)
+    @:
+#  它什么也没有做,但是依赖里做了事情, 
+#  1. $(builtin-target) 负责创建 built-in.o 文件, 
+#  2. $(subdir-ym) 负责进入嵌套子目录
+$(subdir-ym):
+    $(Q)$(MAKE) $(build)=$@ #这里同样是调用了 scripts/Makefile.build, 不过是针对的嵌套的子目录
+
+#  下面重点看一下 $(builtin-target), 
+cmd_make_builtin = rm -f $@; $(AR) rcSTP$(KBUILD_ARFLAGS)       # 调用了ar命令生成一个 thin archive: build-in.o
+cmd_make_empty_builtin = rm -f $@; $(AR) rcSTP$(KBUILD_ARFLAGS) # 只是创建一个空的 build-in.o
+
+cmd_link_o_target = $(if $(strip $(obj-y)),\            # 这几句话的意思是当 obj-y 为空的时候执行 cmd_make_empty_builtin
+    $(cmd_make_builtin) $@ $(filter $(obj-y), $^) \     # 否则就执行 cmd_make_builtin
+    $(cmd_secanalysis),\
+    $(cmd_make_empty_builtin) $@)
+
+$(builtin-target): $(obj-y) FORCE   #依赖 $(obj-y), 而 $(obj-y) 就是当前目录下需要编译的 source 文件
+    $(call if_changed,link_o_target)
+
+#  scripts/Makefile.build 还制定了 .c 编译为 .o 的规则:
+cmd_cc_o_c = $(CC) $(c_flags) -c -o $@ $<
+
+define rule_cc_o_c
+    $(call echo-cmd,checksrc) $(cmd_checksrc)              \    #做了很多事,检查源文件, 为导出的 module 符号使能版本信息
+    $(call cmd_and_fixdep,cc_o_c)                      \        #最重要的是 调用 cmd_cc_o_c 将 .c 编译成 .o
+    $(cmd_modversions_c)                          \
+    $(call echo-cmd,objtool) $(cmd_objtool)                  \
+    $(call echo-cmd,record_mcount) $(cmd_record_mcount)
+endef
+
+$(obj)/%.o: $(src)/%.c $(recordmcount_source) $(objtool_dep) FORCE
+    $(call cmd,force_checksrc)
+    $(call if_changed_rule,cc_o_c)  # if_changed_rule 成立的话会调用 rule_cc_o_c
+
+
+
+################ 003 linux 的启动序列
+# 关于 linux 使用的连接脚本,顶层 Makefile 有定义,
+export KBUILD_LDS          := arch/$(SRCARCH)/kernel/vmlinux.lds    # 这个是 linux 的连接脚本
+#但是这其实只是一个模板,实际会用具体的值进行替换,模板对于分析足够了
+#连接脚本中出现的第一个段是 .head.text, entry point 就应该在这里
+
+#entry point:当 kernel 被 load 之后,这个 binary的内容被拷贝到内存的某个area,程序就从这块area的起始开始执行
+#arm64 架构中使用 .head.text(通过 __HEAD 宏) 段的是一个文件 arch/arm64/kernel/head.S
+
+当linux kernel boot 的时候,他会假定系统(硬件)处于一种"已知的状态"
+定义这个"已知状态"的规则就是所谓的 "boot protocol",其中有几个比如:boot on 主cpu,关闭mmu,关中断
+谁负责将cpu带入这种已知的状态? bootloader, bootloader 一般都 machine specific,
+对于 rasp pi来说,其bootlader是板级固定好的,我们只能通过 config.txt来指定他的一些行为
+
+
+
+
+
+
+
+汇编函数,若是要返回值的话,放在x0中(返回一个int)
