@@ -12,5 +12,6 @@ typedef enum {
 void LED_Init(void);
 void LED_Set(LED_idx led, BitAction val);
 FlagStatus LED_Get(LED_idx led);
+void LED_Toggle(LED_idx led);
 
 #endif

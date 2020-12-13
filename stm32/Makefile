@@ -33,10 +33,15 @@ OBJS += hardware/lib/src/peripherals/stm32f10x_rtc.o
 #user files
 OBJS += main.o
 OBJS += stm32f10x_it.o
+
 OBJS += common/queue.o
+OBJS += common/tLibBitmap.o
+OBJS += common/tLibList.o
+
 OBJS += hardware/device/led.o
 OBJS += hardware/device/systick.o
 OBJS += hardware/device/usart.o
+OBJS += tos/test.o
 
 
 PROJ_NAME = main

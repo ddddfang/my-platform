@@ -48,3 +48,13 @@ FlagStatus LED_Get(LED_idx led)
 {
     return (FlagStatus)GPIO_ReadOutputDataBit(leds[led].base, leds[led].pinidx);
 }
+
+void LED_Toggle(LED_idx led)
+{
+    if (LED_Get(led) == SET) {
+        LED_Set(led, Bit_RESET);
+    } else {
+        LED_Set(led, Bit_SET);
+    }
+    //leds[led].base->ODR ^= (1 << leds[led].pinidx);
+}
