@@ -35,7 +35,7 @@ void task1Entry (void * param)
 {
     tTaskInfo taskInfo;
 
-    tSetSysTickPeriod(10);
+    //tSetSysTickPeriod(10);
     for (;;)
     {
         // 获取自己的状态信息

@@ -1,6 +1,22 @@
 #include "systick.h"
 #include "misc.h"
 
+
+void systick_init(u8 SYSCLK, u8 nms)
+{
+    u8 fac_us;			//1us ticks
+    NVIC_SetPriority (SysTick_IRQn, (1 << __NVIC_PRIO_BITS) - 1);
+    SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK_Div8);//AHB/8 as the clock source
+    fac_us = SYSCLK / 8;
+
+    SysTick->LOAD = (u32)nms * 1000 * fac_us;   //nms timeout
+    SysTick->VAL = 0x00;
+    SysTick->CTRL |= (3 << 0);
+}
+
+
+
+#if 0
 static u8  fac_us = 0;
 static u16 fac_ms = 0;
 
@@ -40,3 +56,6 @@ void delay_ms(u16 nms)
     SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
     SysTick->VAL = 0X00;
 }
+
+#endif
+

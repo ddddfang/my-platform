@@ -1,271 +1,193 @@
-/*************************************** Copyright (c)******************************************************
-** File name            :   tTask.c
-** Latest modified Date :   2016-06-01
-** Latest Version       :   0.1
-** Descriptions         :   tinyOS的任务管理接口实现
-**
-**--------------------------------------------------------------------------------------------------------
-** Created by           :   01课堂 lishutong
-** Created date         :   2016-06-01
-** Version              :   1.0
-** Descriptions         :   The original version
-**
-**--------------------------------------------------------------------------------------------------------
-** Copyright            :   版权所有，禁止用于商业用途
-** Author Blog          :   http://ilishutong.com
-**********************************************************************************************************/
+
+#include "stm32f10x.h"
 #include "tinyOS.h"
 
-/**********************************************************************************************************
-** Function name        :   tTaskInit
-** Descriptions         :   初始化任务结构
-** parameters           :   task        要初始化的任务结构
-** parameters           :   entry       任务的入口函数
-** parameters           :   param       传递给任务的运行参数
-** Returned value       :   无
-***********************************************************************************************************/
-void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio, uint32_t * stack)
+#define NVIC_INT_CTRL       0xE000ED04      // 中断控制及状态寄存器
+#define NVIC_PENDSVSET      0x10000000      // 触发软件中断的值
+#define NVIC_SYSPRI2        0xE000ED22      // 系统优先级寄存器
+#define NVIC_PENDSV_PRI     0x000000FF      // 配置优先级
+
+#define MEM32(addr)         *(volatile unsigned long *)(addr)
+#define MEM8(addr)          *(volatile unsigned char *)(addr)
+
+uint32_t tTaskEnterCritical (void)
 {
-    // 为了简化代码，tinyOS无论是在启动时切换至第一个任务，还是在运行过程中在不同间任务切换
-    // 所执行的操作都是先保存当前任务的运行环境参数（CPU寄存器值）的堆栈中(如果已经运行运行起来的话)，然后再
-    // 取出从下一个任务的堆栈中取出之前的运行环境参数，然后恢复到CPU寄存器
-    // 对于切换至之前从没有运行过的任务，我们为它配置一个“虚假的”保存现场，然后使用该现场恢复。
-
-    // 注意以下两点：
-    // 1、不需要用到的寄存器，直接填了寄存器号，方便在IDE调试时查看效果；
-    // 2、顺序不能变，要结合PendSV_Handler以及CPU对异常的处理流程来理解
-    *(--stack) = (unsigned long)(1<<24);                // XPSR, 设置了Thumb模式，恢复到Thumb状态而非ARM状态运行
-    *(--stack) = (unsigned long)entry;                  // 程序的入口地址
-    *(--stack) = (unsigned long)0x14;                   // R14(LR), 任务不会通过return xxx结束自己，所以未用
-    *(--stack) = (unsigned long)0x12;                   // R12, 未用
-    *(--stack) = (unsigned long)0x3;                    // R3, 未用
-    *(--stack) = (unsigned long)0x2;                    // R2, 未用
-    *(--stack) = (unsigned long)0x1;                    // R1, 未用
-    *(--stack) = (unsigned long)param;                  // R0 = param, 传给任务的入口函数
-    *(--stack) = (unsigned long)0x11;                   // R11, 未用
-    *(--stack) = (unsigned long)0x10;                   // R10, 未用
-    *(--stack) = (unsigned long)0x9;                    // R9, 未用
-    *(--stack) = (unsigned long)0x8;                    // R8, 未用
-    *(--stack) = (unsigned long)0x7;                    // R7, 未用
-    *(--stack) = (unsigned long)0x6;                    // R6, 未用
-    *(--stack) = (unsigned long)0x5;                    // R5, 未用
-    *(--stack) = (unsigned long)0x4;                    // R4, 未用
-
-    task->slice = TINYOS_SLICE_MAX;                     // 初始化任务的时间片计数
-    task->stack = stack;                                // 保存最终的值
-    task->prio = prio;                                  // 设置任务的优先级
-    task->state = TINYOS_TASK_STATE_RDY;                // 设置任务为就绪状态
-    task->suspendCount = 0;                             // 初始挂起次数为0
-    task->clean = (void(*)(void *))0;                   // 设置清理函数
-    task->cleanParam = (void *)0;                       // 设置传递给清理函数的参数
-    task->requestDeleteFlag = 0;                        // 请求删除标记
-
-    tNodeInit(&(task->delayNode));                      // 初始化延时结点
-    
-    tNodeInit(&(task->linkNode));                       // 初始化链接结点
-
-    tTaskSchedRdy(task);                                // 将任务插入就绪队列
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();        // CPSID I
+    return primask;
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskSuspend
-** Descriptions         :   挂起指定的任务
-** parameters           :   task        待挂起的任务
-** Returned value       :   无
-***********************************************************************************************************/
-void tTaskSuspend (tTask * task) 
+void tTaskExitCritical (uint32_t status) {
+    __set_PRIMASK(status);
+}
+
+void tTaskRunFirst()
 {
-    // 进入临界区
+    __set_PSP(0);   // 这里设置 PSP = 0, 用于与 tTaskSwitch()区分
+
+    // 将 PendSV 的中断优先配置为最低, 这样只有在其它所有中断完成后, 才会触发该中断
+    MEM8(NVIC_SYSPRI2) = NVIC_PENDSV_PRI;
+    MEM32(NVIC_INT_CTRL) = NVIC_PENDSVSET;  // trigger SysTick_Handler
+    // will never reached here.
+}
+
+// 进行一次任务切换, 预先配置好 currentTask 和 nextTask
+void tTaskSwitch()
+{
+    // 这个函数会在某个任务中调用，然后触发PendSV切换至其它任务
+    // 之后的某个时候，将会再次切换到该任务运行，此时，开始运行该行代码, 返回到
+    // tTaskSwitch调用处继续往下运行
+    MEM32(NVIC_INT_CTRL) = NVIC_PENDSVSET;  // 向NVIC_INT_CTRL写NVIC_PENDSVSET，用于PendSV
+}
+
+
+void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio, uint32_t * stack)
+{
+    *(--stack) = (unsigned long)(1<<24);        // XPSR, 设置了Thumb模式，恢复到Thumb状态而非ARM状态运行
+    *(--stack) = (unsigned long)entry;          // 程序的入口地址
+    *(--stack) = (unsigned long)0x14;           // R14(LR), 任务不会通过return xxx结束自己，所以未用
+    *(--stack) = (unsigned long)0x12;           // R12, 未用
+    *(--stack) = (unsigned long)0x3;            // R3, 未用
+    *(--stack) = (unsigned long)0x2;            // R2, 未用
+    *(--stack) = (unsigned long)0x1;            // R1, 未用
+    *(--stack) = (unsigned long)param;          // R0 = param, 传给任务的入口函数
+    *(--stack) = (unsigned long)0x11;           // R11, 未用
+    *(--stack) = (unsigned long)0x10;           // R10, 未用
+    *(--stack) = (unsigned long)0x9;            // R9, 未用
+    *(--stack) = (unsigned long)0x8;            // R8, 未用
+    *(--stack) = (unsigned long)0x7;            // R7, 未用
+    *(--stack) = (unsigned long)0x6;            // R6, 未用
+    *(--stack) = (unsigned long)0x5;            // R5, 未用
+    *(--stack) = (unsigned long)0x4;            // R4, 未用
+
+    task->slice = TINYOS_SLICE_MAX;             // 初始化任务的时间片计数
+    task->stack = stack;                        // 保存最终的值
+    task->prio = prio;                          // 设置任务的优先级
+    task->state = TINYOS_TASK_STATE_RDY;        // 设置任务为就绪状态
+    task->suspendCount = 0;                     // 初始挂起次数为0
+    task->clean = (void(*)(void *))0;           // 设置清理函数
+    task->cleanParam = (void *)0;               // 设置传递给清理函数的参数
+    task->requestDeleteFlag = 0;                // 请求删除标记
+
+    tNodeInit(&(task->delayNode));              // 初始化延时结点    
+    tNodeInit(&(task->linkNode));               // 初始化链接结点
+    tTaskSchedRdy(task);                        // 将任务插入就绪队列
+}
+
+// 挂起指定的任务
+void tTaskSuspend (tTask * task)
+{
     uint32_t status = tTaskEnterCritical();
 
     // 不允许对已经进入延时状态的任务挂起
-    if (!(task->state & TINYOS_TASK_STATE_DELAYED)) 
-    {
-        // 增加挂起计数，仅当该任务被执行第一次挂起操作时，才考虑是否
-        // 要执行任务切换操作
-        if (++task->suspendCount <= 1)
-        {
-            // 设置挂起标志
+    if (!(task->state & TINYOS_TASK_STATE_DELAYED)) {
+        // 仅当该任务被执行第一次挂起操作时，才考虑是否要执行任务切换操作
+        if (++task->suspendCount <= 1) {
             task->state |= TINYOS_TASK_STATE_SUSPEND;
 
-            // 挂起方式很简单，就是将其从就绪队列中移除，这样调度器就不会发现他
-            // 也就没法切换到该任务运行
-            tTaskSchedUnRdy(task);
-
-            // 当然，这个任务可能是自己，那么就切换到其它任务
-            if (task == currentTask)
-            {
+            tTaskSchedUnRdy(task);      // 就是将其从就绪队列中移除
+            if (task == currentTask) {  // 任务是自己, 就切换到其它任务
                 tTaskSched();
             }
         }
     }
-
-    // 退出临界区
     tTaskExitCritical(status); 
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskWakeUp
-** Descriptions         :   唤醒被挂起的任务
-** parameters           :   task        待唤醒的任务
-** Returned value       :   无
-***********************************************************************************************************/
+// 唤醒被挂起的任务
 void tTaskWakeUp (tTask * task)
 {
-    // 进入临界区
     uint32_t status = tTaskEnterCritical();
 
-     // 检查任务是否处于挂起状态
-    if (task->state & TINYOS_TASK_STATE_SUSPEND)
-    {
-        // 递减挂起计数，如果为0了，则清除挂起标志，同时设置进入就绪状态
+    if (task->state & TINYOS_TASK_STATE_SUSPEND) {  // 检查任务是否处于挂起状态
         if (--task->suspendCount == 0) 
         {
-            // 清除挂起标志
             task->state &= ~TINYOS_TASK_STATE_SUSPEND;
 
-            // 同时将任务放回就绪队列中
-            tTaskSchedRdy(task);
-
-            // 唤醒过程中，可能有更高优先级的任务就绪，执行一次任务调度
-            tTaskSched();
+            tTaskSchedRdy(task);    // 同时将任务放回就绪队列中
+            tTaskSched();           // 唤醒过程中，可能有更高优先级的任务就绪，执行一次任务调度
         }
     }
-
-    // 退出临界区
     tTaskExitCritical(status); 
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskSetCleanCallFunc
-** Descriptions         :   设置任务被删除时调用的清理函数
-** parameters           :   task  待设置的任务
-** parameters           :   clean  清理函数入口地址
-** parameters           :   param  传递给清理函数的参数
-** Returned value       :   无
-***********************************************************************************************************/
+// 设置任务被删除时调用的清理函数
 void tTaskSetCleanCallFunc (tTask * task, void (*clean)(void * param), void * param) 
 {
     task->clean = clean;
     task->cleanParam = param;
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskForceDelete
-** Descriptions         :   强制删除指定的任务
-** parameters           :   task  需要删除的任务
-** Returned value       :   无
-***********************************************************************************************************/
-void tTaskForceDelete (tTask * task) 
+// 强制删除指定的任务
+void tTaskForceDelete (tTask * task)
 {
-    // 进入临界区
     uint32_t status = tTaskEnterCritical();
 
-     // 如果任务处于延时状态，则从延时队列中删除
-    if (task->state & TINYOS_TASK_STATE_DELAYED) 
-    {
+    if (task->state & TINYOS_TASK_STATE_DELAYED) {  // 如果任务处于延时状态，则从延时队列中删除
         tTimeTaskRemove(task);
-    }
-		// 如果任务不处于挂起状态，那么就是就绪态，从就绪表中删除
-    else if (!(task->state & TINYOS_TASK_STATE_SUSPEND))
-    {
+    } else if (!(task->state & TINYOS_TASK_STATE_SUSPEND)) {
+        // 如果任务不处于挂起状态，那么就是就绪态，从就绪表中删除
         tTaskSchedRemove(task);
     }
 
-    // 删除时，如果有设置清理函数，则调用清理函数
-    if (task->clean) 
-    {
+    if (task->clean) {  // 删除时，如果有设置清理函数，则调用清理函数
         task->clean(task->cleanParam);
     }
 
     // 如果删除的是自己，那么需要切换至另一个任务，所以执行一次任务调度
-    if (currentTask == task) 
-    {
+    if (currentTask == task) {
         tTaskSched();
     }
 
-    // 退出临界区
     tTaskExitCritical(status); 
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskRequestDelete
-** Descriptions         :   请求删除某个任务，由任务自己决定是否删除自己
-** parameters           :   task  需要删除的任务
-** Returned value       :   无
-***********************************************************************************************************/
+// 请求删除某个任务，由任务自己决定是否删除自己
 void tTaskRequestDelete (tTask * task)
 {
-   // 进入临界区
     uint32_t status = tTaskEnterCritical();
 
     // 设置清除删除标记
     task->requestDeleteFlag = 1;
 
-    // 退出临界区
     tTaskExitCritical(status); 
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskIsRequestedDelete
-** Descriptions         :   是否已经被请求删除自己
-** parameters           :   无
-** Returned value       :   非0表示请求删除，0表示无请求
-***********************************************************************************************************/
+// 是否已经被请求删除自己
+// Returned value : 非0表示请求删除，0表示无请求
 uint8_t tTaskIsRequestedDelete (void)
 {
     uint8_t delete;
 
-   // 进入临界区
     uint32_t status = tTaskEnterCritical();
 
     // 获取请求删除标记
     delete = currentTask->requestDeleteFlag;
 
-    // 退出临界区
-    tTaskExitCritical(status); 
-
+    tTaskExitCritical(status);
     return delete;
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskDeleteSelf
-** Descriptions         :   删除自己
-** parameters           :   无
-** Returned value       :   无
-***********************************************************************************************************/
+// 删除自己
 void tTaskDeleteSelf (void)
 {
-    // 进入临界区
     uint32_t status = tTaskEnterCritical();
 
-    // 任务在调用该函数时，必须是处于就绪状态，不可能处于延时或挂起等其它状态
-    // 所以，只需要从就绪队列中移除即可
+    // 任务在调用该函数时, 必处于就绪状态, 只需要从就绪队列中移除即可
     tTaskSchedRemove(currentTask);
 
     // 删除时，如果有设置清理函数，则调用清理函数
-    if (currentTask->clean)
-    {
+    if (currentTask->clean) {
         currentTask->clean(currentTask->cleanParam);
     }
+    tTaskSched();   // 接下来，肯定是切换到其它任务去运行
 
-    // 接下来，肯定是切换到其它任务去运行
-    tTaskSched();
-
-    // 退出临界区
     tTaskExitCritical(status); 
 }
 
-/**********************************************************************************************************
-** Function name        :   tTaskGetInfo
-** Descriptions         :   获取任务相关信息
-** parameters           :   task 需要查询的任务
-** parameters           :   info 任务信息存储结构
-** Returned value       :   无
-***********************************************************************************************************/
+// 获取任务相关信息
 void tTaskGetInfo (tTask * task, tTaskInfo * info)
 {
-   // 进入临界区
     uint32_t status = tTaskEnterCritical();
 
     info->delayTicks = task->delayTicks;                // 延时信息
@@ -274,7 +196,6 @@ void tTaskGetInfo (tTask * task, tTaskInfo * info)
     info->slice = task->slice;                          // 剩余时间片
     info->suspendCount = task->suspendCount;            // 被挂起的次数
 
-    // 退出临界区
     tTaskExitCritical(status); 
 }
 

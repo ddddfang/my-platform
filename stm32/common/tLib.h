@@ -17,14 +17,12 @@
 #ifndef TLIB_H
 #define TLIB_H
 
-// 标准头文件，里面包含了常用的类型定义，如uint32_t
-#include <stdint.h>
+#include "stm32f10x.h"
 
-// 位图类型：该位图只支持最大8位，如果需要的可扩充至更多位
 typedef struct 
 {
 	uint32_t bitmap;
-}tBitmap;
+} tBitmap;
 
 void tBitmapInit (tBitmap * bitmap);
 uint32_t tBitmapPosCount (void);
@@ -37,7 +35,7 @@ typedef struct _tNode
 {
     struct _tNode * preNode;
     struct _tNode * nextNode;
-}tNode;
+} tNode;
 
 void tNodeInit (tNode * node);
 
@@ -45,9 +43,10 @@ typedef struct _tList
 {   
     tNode headNode;
     uint32_t nodeCount;
-}tList;
+} tList;
 
-#define tNodeParent(node, parent, name) (parent *)((uint32_t)node - (uint32_t)&((parent *)0)->name)
+#define tNodeParent(node, parent, name) \
+    (parent *)((uint32_t)node - (uint32_t)&((parent *)0)->name)
 
 void tListInit (tList * list);
 uint32_t tListCount (tList * list);

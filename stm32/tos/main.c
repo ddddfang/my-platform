@@ -51,12 +51,6 @@ tTask * tTaskHighestReady (void)
     return (tTask *)tNodeParent(node, tTask, linkNode);
 }
 
-/**********************************************************************************************************
-** Function name        :   初始化调度器
-** Descriptions         :   无
-** parameters           :   无
-** Returned value       :   无
-***********************************************************************************************************/
 void tTaskSchedInit (void)
 {
     int i = 0;

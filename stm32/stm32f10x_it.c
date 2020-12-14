@@ -130,8 +130,11 @@ void PendSV_Handler(void)
   * @param  None
   * @retval None
   */
+#include "led.h"
+//tTaskSystemTickHandler(); //this func will trigger PendSV_Handler()
 void SysTick_Handler(void)
 {
+    LED_Toggle(LED1);
 }
 
 /******************************************************************************/
@@ -150,9 +153,8 @@ void SysTick_Handler(void)
 {
 }*/
 
-#include "queue.h"
 #include "stm32f10x_usart.h"
-
+#include "queue.h"
 void USART1_IRQHandler(void)
 {
     u8 Recv;

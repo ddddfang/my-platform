@@ -28,81 +28,67 @@ void tNodeInit (tNode * node)
 
 void tListInit (tList * list)
 {
-	list->firstNode = &(list->headNode);
+    list->firstNode = &(list->headNode);
     list->lastNode = &(list->headNode);
     list->nodeCount = 0;
 }
 
 uint32_t tListCount (tList * list)
 {
-	return list->nodeCount;
+    return list->nodeCount;
 }
 
 tNode * tListFirst (tList * list)
 {
     tNode * node = (tNode *)0;
-	
-	if (list->nodeCount != 0) 
-	{
-		node = list->firstNode;
-	}    
-    return  node;
+
+    if (list->nodeCount != 0) {
+        node = list->firstNode;
+    }
+    return node;
 }
 
 tNode * tListLast (tList * list)
 {
     tNode * node = (tNode *)0;
-	
-	if (list->nodeCount != 0) 
-	{
-		node = list->lastNode;
-	}    
+
+    if (list->nodeCount != 0) {
+        node = list->lastNode;
+    }
     return  node;
 }
 
 tNode * tListPre (tList * list, tNode * node)
 {
-	if (node->preNode == node) 
-	{
-		return (tNode *)0;
-	} 
-	else 
-	{
-		return node->preNode;
-	}
+    if (node->preNode == node) {
+        return (tNode *)0;
+    } else {
+        return node->preNode;
+    }
 }
 
 tNode * tListNext (tList * list, tNode * node)
 {
-	if (node->nextNode == node) 
-	{
-		return (tNode *)0;
-	}
-	else 
-	{
-		return node->nextNode;
-	}
+    if (node->nextNode == node) {
+        return (tNode *)0;
+    } else {
+        return node->nextNode;
+    }
 }
 
 void tListRemoveAll (tList * list)
 {
     uint32_t count;
     tNode * nextNode;
-        
-    // 遍历所有的结点
+
     nextNode = list->firstNode;
-    for (count = list->nodeCount; count != 0; count-- )
-    {
-    	// 先纪录下当前结点，和下一个结点
-    	// 必须纪录下一结点位置，因为在后面的代码中当前结点的next会被重置
+    for (count = list->nodeCount; count != 0; count--) {
         tNode * currentNode = nextNode;
         nextNode = nextNode->nextNode;
-        
-        // 重置结点自己的信息
+
         currentNode->nextNode = currentNode;
         currentNode->preNode = currentNode;
     }
-    
     list->firstNode = &(list->headNode);
     list->lastNode = &(list->headNode);
     list->nodeCount = 0;
@@ -132,8 +118,7 @@ tNode * tListRemoveFirst (tList * list)
 {
     tNode * node = (tNode *)0;
 
-	if( list->nodeCount != 0 )
-    {
+    if(list->nodeCount != 0) {
         node = list->firstNode;
 
         node->nextNode->preNode = &(list->headNode);
@@ -150,7 +135,6 @@ void tListInsertAfter (tList * list, tNode * nodeAfter, tNode * nodeToInsert)
 
     nodeAfter->nextNode->preNode = nodeToInsert;
     nodeAfter->nextNode = nodeToInsert;
-
     list->nodeCount++;
 }
 
