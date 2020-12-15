@@ -1,5 +1,4 @@
 
-#include "stm32f10x.h"
 #include "tinyOS.h"
 
 #define NVIC_INT_CTRL       0xE000ED04      // 中断控制及状态寄存器
@@ -17,7 +16,8 @@ uint32_t tTaskEnterCritical (void)
     return primask;
 }
 
-void tTaskExitCritical (uint32_t status) {
+void tTaskExitCritical (uint32_t status)
+{
     __set_PRIMASK(status);
 }
 
@@ -27,23 +27,23 @@ void tTaskRunFirst()
 
     // 将 PendSV 的中断优先配置为最低, 这样只有在其它所有中断完成后, 才会触发该中断
     MEM8(NVIC_SYSPRI2) = NVIC_PENDSV_PRI;
-    MEM32(NVIC_INT_CTRL) = NVIC_PENDSVSET;  // trigger SysTick_Handler
+    MEM32(NVIC_INT_CTRL) = NVIC_PENDSVSET;  // trigger PendSV_Handler
     // will never reached here.
 }
 
-// 进行一次任务切换, 预先配置好 currentTask 和 nextTask
 void tTaskSwitch()
 {
-    // 这个函数会在某个任务中调用，然后触发PendSV切换至其它任务
-    // 之后的某个时候，将会再次切换到该任务运行，此时，开始运行该行代码, 返回到
-    // tTaskSwitch调用处继续往下运行
-    MEM32(NVIC_INT_CTRL) = NVIC_PENDSVSET;  // 向NVIC_INT_CTRL写NVIC_PENDSVSET，用于PendSV
+    // trigger PendSV_Handler-> switch ctx, 预先配置好 currentTask 和 nextTask !
+    // 调用该函数的任务下次恢复时将从这里继续向下运行
+    MEM32(NVIC_INT_CTRL) = NVIC_PENDSVSET;
 }
 
-
+//--------------------------------------------------------------------------------
 void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio, uint32_t * stack)
 {
-    *(--stack) = (unsigned long)(1<<24);        // XPSR, 设置了Thumb模式，恢复到Thumb状态而非ARM状态运行
+    //fang:先做状态检查,优先级超过 TINYOS_PRO_COUNT 就失败
+    //优先级也不能是最后一个 因为预留给 idle 了,并且看起来 idle不想和任何任务时间片轮转
+    *(--stack) = (unsigned long)(1 << 24);      // XPSR, 设置了Thumb模式，恢复到Thumb状态而非ARM状态运行
     *(--stack) = (unsigned long)entry;          // 程序的入口地址
     *(--stack) = (unsigned long)0x14;           // R14(LR), 任务不会通过return xxx结束自己，所以未用
     *(--stack) = (unsigned long)0x12;           // R12, 未用
@@ -74,6 +74,101 @@ void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio,
     tTaskSchedRdy(task);                        // 将任务插入就绪队列
 }
 
+//--------------------------------------------------------------------------------
+tTask * currentTask;
+tTask * nextTask;
+
+
+tBitmap taskPrioBitmap; // 任务优先级的标记位置结构
+uint8_t schedLockCount; // 调度锁计数器
+
+// 所有任务的指针数组
+// 以优先级作为关键字索引,每个数组成员都是一个list,相同优先级的任务都在此list上
+tList taskTable[TINYOS_PRO_COUNT];
+
+
+void tTaskSchedInit (void)
+{
+    int i = 0;
+    schedLockCount = 0;
+    tBitmapInit(&taskPrioBitmap);
+    for (i = 0; i < TINYOS_PRO_COUNT; i++) {
+        tListInit(&taskTable[i]);
+    }
+}
+
+void tTaskSchedDisable (void)
+{
+    uint32_t status = tTaskEnterCritical();
+    if (schedLockCount < 255) {
+        schedLockCount++;
+    }
+    tTaskExitCritical(status);
+}
+
+void tTaskSchedEnable (void)
+{
+    uint32_t status = tTaskEnterCritical();
+    if (schedLockCount > 0) {
+        if (--schedLockCount == 0) {
+            tTaskSched();
+        }
+    }
+    tTaskExitCritical(status);
+}
+
+void tTaskSchedRdy (tTask * task)
+{
+    tListAddLast(&taskTable[task->prio], &(task->linkNode));    // 加入到 taskTable
+    tBitmapSet(&taskPrioBitmap, task->prio);    // 加入bitmap后就可以调度到此任务
+}
+
+void tTaskSchedUnRdy (tTask * task)
+{
+    tListRemove(&taskTable[task->prio], &(task->linkNode));     // 从 taskTable 中删除
+    if (tListCount(&taskTable[task->prio]) == 0) {  // 同优先级组成的list为空时才清除 bitmap
+        tBitmapClear(&taskPrioBitmap, task->prio);
+    }
+}
+
+// 将任务从就绪列表中移除,看起来和 tTaskSchedUnRdy 一样的
+void tTaskSchedRemove (tTask * task)
+{
+    tListRemove(&taskTable[task->prio], &(task->linkNode));
+    if (tListCount(&taskTable[task->prio]) == 0) {
+        tBitmapClear(&taskPrioBitmap, task->prio);
+    }
+}
+
+tTask * tTaskHighestReady (void)
+{
+    // 获取当前ready状态的最高优先级任务
+    uint32_t highestPrio = tBitmapGetFirstSet(&taskPrioBitmap);
+    tNode * node = tListFirst(&taskTable[highestPrio]);
+    return (tTask *)tNodeParent(node, tTask, linkNode);
+}
+
+// 任务调度,选择处于ready状态的最高优先级的任务,并触发任务切换
+void tTaskSched (void)
+{
+    tTask * tempTask;
+    // 防止 currentTask / nextTask 被意外修改
+    uint32_t status = tTaskEnterCritical();
+
+    if (schedLockCount > 0) {       // 调度器被上锁则不调度
+        tTaskExitCritical(status);
+        return;
+    }
+
+    tempTask = tTaskHighestReady(); //找到处于ready状态的最高优先级任务
+    if (tempTask != currentTask) {
+        nextTask = tempTask;
+        tTaskSwitch();   //trigger PendSV_Handler, 当中断打开的时候会立马进入 PendSV_Handler
+    }
+    tTaskExitCritical(status);
+}
+
+
 // 挂起指定的任务
 void tTaskSuspend (tTask * task)
 {
@@ -100,8 +195,7 @@ void tTaskWakeUp (tTask * task)
     uint32_t status = tTaskEnterCritical();
 
     if (task->state & TINYOS_TASK_STATE_SUSPEND) {  // 检查任务是否处于挂起状态
-        if (--task->suspendCount == 0) 
-        {
+        if (--task->suspendCount == 0) {
             task->state &= ~TINYOS_TASK_STATE_SUSPEND;
 
             tTaskSchedRdy(task);    // 同时将任务放回就绪队列中

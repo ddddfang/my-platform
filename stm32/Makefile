@@ -41,7 +41,7 @@ OBJS += common/tLibList.o
 OBJS += hardware/device/led.o
 OBJS += hardware/device/systick.o
 OBJS += hardware/device/usart.o
-OBJS += tos/test.o
+OBJS += tos/switch.o
 
 
 PROJ_NAME = main
