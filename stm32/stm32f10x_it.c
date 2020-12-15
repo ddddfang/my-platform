@@ -120,10 +120,13 @@ void DebugMon_Handler(void)
   * @brief  This function handles PendSV_Handler exception.
   * @param  None
   * @retval None
+  * fang: we implement this func in switch.s, asm function ?
   */
-void PendSV_Handler(void)
-{
-}
+//extern void switch_ctx(void);
+//void PendSV_Handler(void)
+//{
+//    //switch_ctx();
+//}
 
 /**
   * @brief  This function handles SysTick Handler.
@@ -131,10 +134,14 @@ void PendSV_Handler(void)
   * @retval None
   */
 #include "led.h"
-//tTaskSystemTickHandler(); //this func will trigger PendSV_Handler()
+#include "tinyOS.h"
 void SysTick_Handler(void)
 {
-    LED_Toggle(LED1);
+    //LED1_Toggle();
+    tTaskSystemTickHandler(); //this func will trigger PendSV_Handler()
+//    __asm__ volatile (
+//    "bl LED1_Toggle\t\n"
+//    );
 }
 
 /******************************************************************************/

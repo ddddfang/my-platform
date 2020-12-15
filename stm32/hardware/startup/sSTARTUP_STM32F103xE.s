@@ -85,6 +85,38 @@ LoopFillZerobss:
 
 .size Reset_Handler, .-Reset_Handler
 
+
+//fang
+.section .text.PendSV_Handler
+.weak PendSV_Handler
+.type PendSV_Handler, %function
+PendSV_Handler:
+    mrs     r0, psp
+    cbz     r0, PendSV_Handler_nosave
+
+    stmfd   r0!, {r4-r11}
+
+    ldr     r1, =currentTask
+    ldr     r1, [r1]
+    str     r0, [r1]    //store stack pointer to memory[currentTask]
+
+PendSV_Handler_nosave:
+
+    ldr     r0, =currentTask    //
+    ldr     r1, =nextTask       //
+    ldr     r2, [r1]            //
+    str     r2, [r0]            // currentTask=nextTask
+
+    ldr     r0, [r2]
+    ldmfd   r0!, {r4-r11}
+
+    msr     psp, r0
+    orr     lr, lr, #0x04       //bit or
+    bx      lr
+
+.size PendSV_Handler, .-PendSV_Handler
+
+
 /**
  * This code gets called when the processor receives an unexpected interrupt.
  * The code simply enters an infinite loop, preserving the system state for
@@ -247,8 +279,8 @@ vector_table:
 .weak DebugMon_Handler
 .thumb_set DebugMon_Handler, Default_Handler
 
-.weak PendSV_Handler
-.thumb_set PendSV_Handler, Default_Handler
+//.weak PendSV_Handler
+//.thumb_set PendSV_Handler, Default_Handler
 
 .weak SysTick_Handler
 .thumb_set SysTick_Handler, Default_Handler

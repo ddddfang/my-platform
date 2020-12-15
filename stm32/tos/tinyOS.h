@@ -43,6 +43,8 @@ typedef struct _tTaskInfo {
 extern tTask * currentTask;
 extern tTask * nextTask;
 
+extern tList taskTable[TINYOS_PRO_COUNT];
+
 uint32_t tTaskEnterCritical (void);
 void tTaskExitCritical (uint32_t status);
 void tTaskRunFirst();
@@ -77,7 +79,7 @@ void tTimeTaskWait (tTask * task, uint32_t ticks);
 void tTimeTaskWakeUp (tTask * task);
 void tTimeTaskRemove (tTask * task);
 
-void tTaskDelayedInit (void) 
+void tTaskDelayedInit (void);
 void tTaskDelay (uint32_t delay);
 void tTaskSystemTickHandler (void);
 
@@ -86,5 +88,7 @@ void tTaskSystemTickHandler (void);
 
 void tInitApp (void);
 
+int tos_init ();
+int tos_start ();
 
 #endif /* TINYOS_H */

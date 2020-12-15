@@ -13,7 +13,7 @@ https://github.com/STM32-base/STM32-base
 
 一个疑问:asm的启动文件中调用 __libc_init_array 
 会提示链接不到_init()，(Makefile去掉 -nostdlib 后能编译通过但是没法执行hex)
-但是c语言版本的启动文件没有这个问题
+但是c语言版本的启动文件没有这个问题(因为他在启动文件里定义了一个空的实现!)
 
 所以在asm版本的启动文件里我只能注释掉 __libc_init_array
 这个函数好像做一些静态变量的构造初始化动作

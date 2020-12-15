@@ -14,4 +14,7 @@ void LED_Set(LED_idx led, BitAction val);
 FlagStatus LED_Get(LED_idx led);
 void LED_Toggle(LED_idx led);
 
+/////////////////////////DEBUG
+void LED1_Toggle(void);
+
 #endif

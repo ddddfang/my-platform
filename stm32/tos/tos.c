@@ -39,7 +39,7 @@ void idleTaskEntry (void * param) {
 //    return 0;
 //}
 
-int tos_init () 
+int tos_init ()
 {
     tTaskSchedInit();
     tTaskDelayedInit();
@@ -49,7 +49,7 @@ int tos_init ()
     return 0;
 }
 
-int tos_start () 
+int tos_start ()
 {
     // 第一次运行的时候, psp=0, 直接跳过前半段,后半段直接 currentTask=nextTask
     nextTask = tTaskHighestReady();

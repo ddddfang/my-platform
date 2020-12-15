@@ -5,8 +5,9 @@
 #include "systick.h"
 #include "usart.h"
 
+#include "tinyOS.h"
 
-extern void test_set(int *a, int v);
+//extern void test_set(int *a, int v);
 
 int main(void)
 {
@@ -18,13 +19,17 @@ int main(void)
     uart_init(115200);
     systick_init(72, 250);
 
-    test_set(&val, 1234);
+    //test_set(&val, 1234);
+    tos_init();
+    tos_start();
 
-    while (1) {
-        //ch = uart_getch();
-        //uart_putchar(ch);
-        //delay_ms(1000);
-    }
+    while(1);
+//    while (1) {
+//        LED_Set(LED0, Bit_RESET);
+//        //ch = uart_getch();
+//        //uart_putchar(ch);
+//        //delay_ms(1000);
+//    }
 }
 
 

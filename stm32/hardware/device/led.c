@@ -58,3 +58,13 @@ void LED_Toggle(LED_idx led)
     }
     //leds[led].base->ODR ^= (1 << leds[led].pinidx);
 }
+
+////////////////////////DEBUG
+void LED1_Toggle(void)
+{
+    if (LED_Get(LED1) == SET) {
+        LED_Set(LED1, Bit_RESET);
+    } else {
+        LED_Set(LED1, Bit_SET);
+    }
+}

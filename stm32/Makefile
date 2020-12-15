@@ -35,13 +35,21 @@ OBJS += main.o
 OBJS += stm32f10x_it.o
 
 OBJS += common/queue.o
-OBJS += common/tLibBitmap.o
-OBJS += common/tLibList.o
 
 OBJS += hardware/device/led.o
 OBJS += hardware/device/systick.o
 OBJS += hardware/device/usart.o
+
+OBJS += common/tLibBitmap.o
+OBJS += common/tLibList.o
+
+#OBJS += $(patsubst %.c,%.o ,$(wildcard ./tos/*.c))
+#OBJS += $(patsubst %.c,%.o ,$(wildcard ./tos/*.s))
 OBJS += tos/switch.o
+OBJS += tos/tTask.o
+OBJS += tos/tTime.o
+OBJS += tos/tos.o
+OBJS += tos/app.o
 
 
 PROJ_NAME = main
@@ -93,6 +101,7 @@ CFLAGS += -Ihardware/lib/inc
 CFLAGS += -Ihardware/lib/inc/core
 CFLAGS += -Ihardware/lib/inc/peripherals
 CFLAGS += -Ihardware/device
+CFLAGS += -Itos
 
 ###################################################
 

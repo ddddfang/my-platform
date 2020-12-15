@@ -1,24 +1,26 @@
 
 .syntax unified
 
-.global test_set
-.section .text.test_set
+//.global test_set
+//.section .text.test_set
+//
+//.type test_set, %function
+//test_set:
+//
+//    str r1, [r0]
+//    bx lr
+//
+//.size test_set, . - test_set
 
-.type test_set, %function
-test_set:
-
-    str r1, [r0]
-    bx lr
-
-.size test_set, . - test_set
 
 
 
-.global switch_ctx
-.section .text.switch_ctx
-
-.type switch_ctx, %function
-switch_ctx:
+.global PendSV_Handler
+.section .text.PendSV_Handler
+.func   PendSV_Handler
+.type   PendSV_Handler,%function
+.thumb_func
+PendSV_Handler:
 
     mrs     r0, psp
     cbz     R0, switch_ctx_nosave
@@ -43,7 +45,8 @@ switch_ctx_nosave:
     orr     lr, lr, #0x04       //bit or
     bx      lr
 
+.size   PendSV_Handler, . - PendSV_Handler
+.endfunc
 
-.size switch_ctx, . - switch_ctx
 
 
