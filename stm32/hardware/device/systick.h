@@ -10,5 +10,6 @@
 //void delay_ms(u16 nms);
 
 void systick_init(u8 SYSCLK, u8 nms);
+u32 systick_getval(void);
 
 #endif

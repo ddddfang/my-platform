@@ -21,7 +21,7 @@ void tTaskExitCritical (uint32_t status)
     __set_PRIMASK(status);
 }
 
-void tTaskRunFirst()
+void tTaskRunFirst(void)
 {
     __set_PSP(0);   // 这里设置 PSP = 0, 用于与 tTaskSwitch()区分
 
@@ -31,7 +31,7 @@ void tTaskRunFirst()
     // will never reached here.
 }
 
-void tTaskSwitch()
+void tTaskSwitch(void)
 {
     // trigger PendSV_Handler-> switch ctx, 预先配置好 currentTask 和 nextTask !
     // 调用该函数的任务下次恢复时将从这里继续向下运行
@@ -78,13 +78,13 @@ void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio,
 tTask * currentTask;
 tTask * nextTask;
 
-
-tBitmap taskPrioBitmap; // 任务优先级的标记位置结构
-uint8_t schedLockCount; // 调度锁计数器
-
 // 所有任务的指针数组
 // 以优先级作为关键字索引,每个数组成员都是一个list,相同优先级的任务都在此list上
 tList taskTable[TINYOS_PRO_COUNT];
+
+
+static tBitmap taskPrioBitmap; // 任务优先级的标记位置结构
+static uint8_t schedLockCount; // 调度锁计数器
 
 
 void tTaskSchedInit (void)
@@ -152,14 +152,11 @@ tTask * tTaskHighestReady (void)
 void tTaskSched (void)
 {
     tTask * tempTask;
-    // 防止 currentTask / nextTask 被意外修改
-    uint32_t status = tTaskEnterCritical();
-
+    uint32_t status = tTaskEnterCritical(); // 防止 currentTask / nextTask 被意外修改
     if (schedLockCount > 0) {       // 调度器被上锁则不调度
         tTaskExitCritical(status);
         return;
     }
-
     tempTask = tTaskHighestReady(); //找到处于ready状态的最高优先级任务
     if (tempTask != currentTask) {
         nextTask = tempTask;
@@ -186,7 +183,7 @@ void tTaskSuspend (tTask * task)
             }
         }
     }
-    tTaskExitCritical(status); 
+    tTaskExitCritical(status);
 }
 
 // 唤醒被挂起的任务

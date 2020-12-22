@@ -122,7 +122,6 @@ void DebugMon_Handler(void)
   * @retval None
   * fang: we implement this func in switch.s, asm function ?
   */
-//extern void switch_ctx(void);
 //void PendSV_Handler(void)
 //{
 //    //switch_ctx();
@@ -133,15 +132,10 @@ void DebugMon_Handler(void)
   * @param  None
   * @retval None
   */
-#include "led.h"
 #include "tinyOS.h"
 void SysTick_Handler(void)
 {
-    //LED1_Toggle();
     tTaskSystemTickHandler(); //this func will trigger PendSV_Handler()
-//    __asm__ volatile (
-//    "bl LED1_Toggle\t\n"
-//    );
 }
 
 /******************************************************************************/

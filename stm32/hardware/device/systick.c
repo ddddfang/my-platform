@@ -14,7 +14,10 @@ void systick_init(u8 SYSCLK, u8 nms)
     SysTick->CTRL |= (3 << 0);
 }
 
-
+u32 systick_getval(void)
+{
+    return SysTick->VAL;
+}
 
 #if 0
 static u8  fac_us = 0;

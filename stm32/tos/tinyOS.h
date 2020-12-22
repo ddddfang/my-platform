@@ -47,8 +47,8 @@ extern tList taskTable[TINYOS_PRO_COUNT];
 
 uint32_t tTaskEnterCritical (void);
 void tTaskExitCritical (uint32_t status);
-void tTaskRunFirst();
-void tTaskSwitch();
+void tTaskRunFirst(void);
+void tTaskSwitch(void);
 
 void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio, uint32_t * stack);
 
@@ -88,7 +88,7 @@ void tTaskSystemTickHandler (void);
 
 void tInitApp (void);
 
-int tos_init ();
-int tos_start ();
+int tos_init (void);
+int tos_start (void);
 
 #endif /* TINYOS_H */

@@ -1,20 +1,6 @@
 
 .syntax unified
 
-//.global test_set
-//.section .text.test_set
-//
-//.type test_set, %function
-//test_set:
-//
-//    str r1, [r0]
-//    bx lr
-//
-//.size test_set, . - test_set
-
-
-
-
 .global PendSV_Handler
 .section .text.PendSV_Handler
 .func   PendSV_Handler

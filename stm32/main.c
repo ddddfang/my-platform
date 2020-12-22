@@ -7,19 +7,21 @@
 
 #include "tinyOS.h"
 
-//extern void test_set(int *a, int v);
+
+void device_init()  //idleTask in tos.c will call it and create all threads
+{
+    LED_Init();
+    uart_init(115200);
+    systick_init(72, 10);
+}
+
 
 int main(void)
 {
-    int val = 0;
+    //int val = 0;
     //u8 ch = 0;
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2); //better not change
 
-    LED_Init();
-    uart_init(115200);
-    systick_init(72, 250);
-
-    //test_set(&val, 1234);
     tos_init();
     tos_start();
 
