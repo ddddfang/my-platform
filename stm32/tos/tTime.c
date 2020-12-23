@@ -2,7 +2,7 @@
 #include "tinyOS.h"
 
 
-tList tTaskDelayedList; // 延时队列
+static tList tTaskDelayedList; // 延时队列
 
 
 void tTaskDelayedInit (void)

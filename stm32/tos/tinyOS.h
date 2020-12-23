@@ -10,10 +10,15 @@
 #define TINYOS_TASK_STATE_DESTROYED             (1 << 0)
 #define TINYOS_TASK_STATE_DELAYED               (1 << 1)
 #define TINYOS_TASK_STATE_SUSPEND               (1 << 2)
+#define TINYOS_TASK_WAIT_MASK                   (0xFF << 16)
 
 // Cortex-M 的堆栈单元类型
 typedef uint32_t tTaskStack;
 
+typedef enum _tError {
+    tErrorNoError = 0,      // 没有错误
+    tErrorTimeout,          // 等待超时
+} tError;
 
 typedef struct _tTask {
     tTaskStack * stack;
@@ -27,6 +32,9 @@ typedef struct _tTask {
     void (*clean) (void * param);    // 任务被删除时调用的清理函数
     void * cleanParam;      // 传递给清理函数的参数
     uint8_t requestDeleteFlag;      // 请求删除标志，非0表示请求删除
+    struct _tEvent * waitEvent;     // 任务正在等待的事件类型
+    void * eventMsg;                // 等待事件的消息存储位置
+    uint32_t waitEventResult;       // 等待事件的结果
 } tTask;
 
 // 任务相关信息
@@ -84,6 +92,23 @@ void tTaskDelay (uint32_t delay);
 void tTaskSystemTickHandler (void);
 
 
+
+//--------------------------------------------------
+typedef enum  _tEventType {
+    tEventTypeUnknown   = 0,    // 未知类型
+} tEventType;
+
+typedef struct _tEvent {    // Event控制结构
+    tEventType type;        // Event类型
+    tList waitList;         // 任务等待列表
+} tEvent;
+
+void tEventInit (tEvent * event, tEventType type);
+void tEventWait (tEvent *event, tTask *task, void *msg, uint32_t state, uint32_t timeout);
+tTask * tEventWakeUp (tEvent *event, void *msg, uint32_t result);
+void tEventRemoveTask (tTask *task, void *msg, uint32_t result);
+uint32_t tEventWakeUpAll (tEvent * event, void * msg, uint32_t result);
+uint32_t tEventWaitCount (tEvent * event);
 
 
 void tInitApp (void);

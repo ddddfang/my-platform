@@ -69,6 +69,10 @@ void tTaskInit (tTask * task, void (*entry)(void *), void *param, uint32_t prio,
     task->cleanParam = (void *)0;               // 设置传递给清理函数的参数
     task->requestDeleteFlag = 0;                // 请求删除标记
 
+    task->waitEvent = (tEvent *)0;                      // 没有等待事件
+    task->eventMsg = (void *)0;                         // 没有等待事件
+    task->waitEventResult = tErrorNoError;              // 没有等待事件错误
+
     tNodeInit(&(task->delayNode));              // 初始化延时结点    
     tNodeInit(&(task->linkNode));               // 初始化链接结点
     tTaskSchedRdy(task);                        // 将任务插入就绪队列

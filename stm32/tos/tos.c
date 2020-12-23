@@ -16,8 +16,7 @@ void idleTaskEntry (void * param) {
 
     LED_Set(LED0, Bit_RESET);
     LED_Set(LED1, Bit_SET);
-    while (1)
-    {
+    while (1) {
         // 暂时什么都不做,可以做的东西包括:
         //1.进入低功耗模式
         //2.刷新GUI
