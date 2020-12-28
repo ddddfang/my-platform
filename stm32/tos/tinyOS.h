@@ -18,6 +18,8 @@ typedef uint32_t tTaskStack;
 typedef enum _tError {
     tErrorNoError = 0,      // 没有错误
     tErrorTimeout,          // 等待超时
+    tErrorResourceUnavaliable,
+    tErrorDel
 } tError;
 
 typedef struct _tTask {
@@ -96,6 +98,7 @@ void tTaskSystemTickHandler (void);
 //--------------------------------------------------
 typedef enum  _tEventType {
     tEventTypeUnknown   = 0,    // 未知类型
+    tEventTypeSem       = 1,    // 信号量类型
 } tEventType;
 
 typedef struct _tEvent {    // Event控制结构
@@ -111,6 +114,29 @@ uint32_t tEventWakeUpAll (tEvent * event, void * msg, uint32_t result);
 uint32_t tEventWaitCount (tEvent * event);
 
 
+//--------------------------------------------------
+typedef struct _tSem {   // 信号量类型
+    // 事件控制块, 该结构被特意放到起始处，以实现tSem同时是一个tEvent的目的
+    tEvent event;
+    uint32_t count;    // 当前的计数
+    uint32_t maxCount;
+} tSem;
+
+typedef struct _tSemInfo {   // 信号量的信息
+    uint32_t count;     // 当前信号量计数
+    uint32_t maxCount;  // 信号量允许的最大计数
+    uint32_t taskCount; // 当前等待的任务计数
+} tSemInfo;
+
+void tSemInit (tSem * sem, uint32_t startCount, uint32_t maxCount);
+uint32_t tSemWait (tSem * sem, uint32_t waitTicks);
+uint32_t tSemNoWaitGet (tSem * sem);
+void tSemNotify (tSem * sem);
+void tSemGetInfo (tSem * sem, tSemInfo * info);
+uint32_t tSemDestroy (tSem * sem);
+
+
+//--------------------------------------------------
 void tInitApp (void);
 
 int tos_init (void);

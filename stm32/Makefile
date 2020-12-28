@@ -49,6 +49,7 @@ OBJS += tos/switch.o
 OBJS += tos/tTask.o
 OBJS += tos/tEvent.o
 OBJS += tos/tTime.o
+OBJS += tos/tSem.o
 OBJS += tos/tos.o
 OBJS += tos/app.o
 

@@ -156,12 +156,15 @@ void SysTick_Handler(void)
 
 #include "stm32f10x_usart.h"
 #include "queue.h"
+#include "tinyOS.h"
+extern tSem sem2;
 void USART1_IRQHandler(void)
 {
     u8 Recv;
     if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET){
         Recv = (u8)USART_ReceiveData(USART1);
         enqueue(&usart_queue, Recv);
+        tSemNotify (&sem2);
     }
 }
 

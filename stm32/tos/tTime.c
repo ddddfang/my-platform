@@ -23,6 +23,7 @@ void tTimeTaskWakeUp (tTask * task)
     // 从延时list中删除,并清除delayed状态
     tListRemove(&tTaskDelayedList, &(task->delayNode));
     task->state &= ~TINYOS_TASK_STATE_DELAYED;
+    task->delayTicks = 0;
     //fang: 这里不用 tTaskSchedRdy 一下 ??
 }
 

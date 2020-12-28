@@ -125,7 +125,7 @@ tNode * tListRemoveFirst (tList * list)
         list->firstNode = node->nextNode;
         list->nodeCount--;
     }
-    return  node;
+    return node;
 }
 
 void tListInsertAfter (tList * list, tNode * nodeAfter, tNode * nodeToInsert)

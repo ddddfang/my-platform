@@ -7,11 +7,15 @@
 static tTask tTask1;
 static tTask tTask2;
 static tTask tTask3;
+//static tTask tTask4;
 static tTaskStack task1Env[1024];
 static tTaskStack task2Env[1024];
 static tTaskStack task3Env[1024];
+//static tTaskStack task4Env[1024];
 //
-static tEvent eDataReady;
+//static tEvent eDataReady;
+static tSem sem1;
+tSem sem2;
 
 void task1Entry (void * param) 
 {
@@ -22,35 +26,43 @@ void task1Entry (void * param)
         tTaskDelay(100); //100*10ms
         //data is ready now..
 
-        uint32_t wakeup_cnt = tEventWakeUpAll(&eDataReady, (void *)0, 0);
-        if (wakeup_cnt > 0) {
-            tTaskSched();
-        }
+        tSemNotify (&sem1);
+
+        //uint32_t wakeup_cnt = tEventWakeUpAll(&eDataReady, (void *)0, 0);
+        //if (wakeup_cnt > 0) {
+        //    tTaskSched();
+        //}
+
+        //
     }
 }
 
 void task2Entry (void * param)
 {
     while(!tTaskIsRequestedDelete()) {
+        uint32_t status = tSemWait(&sem1, 0);
         uart_putchar('B');
-        tEventWait (&eDataReady, currentTask, (void *)0, 0, 0);
-        tTaskSched();
+        //tEventWait (&eDataReady, currentTask, (void *)0, 0, 0);
+        //tTaskSched();
     }
 }
 
 void task3Entry (void * param)
 {
     while(!tTaskIsRequestedDelete()) {
+        uint32_t status = tSemWait(&sem2, 0);
         uart_putchar('C');
-        tEventWait (&eDataReady, currentTask, (void *)0, 0, 0);
-        tTaskSched();
+        //tEventWait (&eDataReady, currentTask, (void *)0, 0, 0);
+        //tTaskSched();
     }
 }
 
 
 void tInitApp (void)   //idleTask in tos.c will call it and init devices
 {
-    tEventInit (&eDataReady, tEventTypeUnknown);
+    //tEventInit (&eDataReady, tEventTypeUnknown);
+    tSemInit(&sem1, 0, 0);
+    tSemInit(&sem2, 0, 10);
 
     // 初始化任务1和任务2结构，传递运行的起始地址，想要给任意参数，以及运行堆栈空间
     tTaskInit(&tTask1, task1Entry, (void *)0x11111111, 0, &task1Env[1024]);
