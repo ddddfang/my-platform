@@ -3,6 +3,8 @@
 #include "led.h"
 #include "usart.h"
 
+#include "printf.h"
+
 // 任务1和任务2的任务结构，以及用于堆栈空间
 static tTask tTask1;
 static tTask tTask2;
@@ -25,8 +27,6 @@ void task1Entry (void * param)
     while(!tTaskIsRequestedDelete()) {
 
         //generate data here..
-        uart_putchar('1');
-        uart_putchar(':');
         tTaskDelay(100); //100*10ms
         //data is ready now..
 
@@ -37,15 +37,14 @@ void task1Entry (void * param)
         //    tTaskSched();
         //}
 
+        shell_printf(">1.\r\n");
         for (uint32_t i = 0; i < 20; i++) {
             //msg is a uint32_t.
             msg[i] = i;
             if (tMboxNotify(&mbox, &msg[i], tMBOXSendNormal) == tErrorResourceFull) {
-                uart_putchar('x');
+                shell_printf("tErrorResourceFull.\r\n");
             }
         }
-        uart_putchar('\r');
-        uart_putchar('\n');
     }
 }
 
@@ -55,18 +54,15 @@ void task2Entry (void * param)
         //uint32_t status = tSemWait(&sem1, 0);
         //tEventWait (&eDataReady, currentTask, (void *)0, 0, 0);
         //tTaskSched();
-        uart_putchar('2');
-        uart_putchar(':');
+
         void * msg;
         uint32_t value;
         uint32_t err = tMboxWait(&mbox, &msg, 1000);
         if (err == tErrorNoError) {
             value = *(uint32_t *)msg;
-            uart_putchar('A'+value);
+            shell_printf(">> 2:%d\r\n", value);
         }
         tTaskDelay(1);
-        uart_putchar('\r');
-        uart_putchar('\n');
     }
 }
 
@@ -76,18 +72,15 @@ void task3Entry (void * param)
         //uint32_t status = tSemWait(&sem2, 0);
         //tEventWait (&eDataReady, currentTask, (void *)0, 0, 0);
         //tTaskSched();
-        uart_putchar('3');
-        uart_putchar(':');
+
         void * msg;
         uint32_t value;
         uint32_t err = tMboxWait(&mbox, &msg, 100);
         if (err == tErrorNoError) {
             value = *(uint32_t *)msg;
-            uart_putchar('a'+value);
+            shell_printf(">>> 3:%d\r\n", value);
         }
         tTaskDelay(1);
-        uart_putchar('\r');
-        uart_putchar('\n');
     }
 }
 

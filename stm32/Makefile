@@ -42,6 +42,7 @@ OBJS += hardware/device/usart.o
 
 OBJS += common/tLibBitmap.o
 OBJS += common/tLibList.o
+OBJS += system/printf.o
 
 #OBJS += $(patsubst %.c,%.o ,$(wildcard ./tos/*.c))
 #OBJS += $(patsubst %.c,%.o ,$(wildcard ./tos/*.s))
@@ -105,6 +106,7 @@ CFLAGS += -Ihardware/lib/inc/core
 CFLAGS += -Ihardware/lib/inc/peripherals
 CFLAGS += -Ihardware/device
 CFLAGS += -Itos
+CFLAGS += -Isystem
 
 ###################################################
 

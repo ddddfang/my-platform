@@ -5,6 +5,8 @@
 #include "systick.h"
 #include "usart.h"
 
+#include "printf.h"
+
 #include "tinyOS.h"
 
 
@@ -13,6 +15,8 @@ void device_init()  //idleTask in tos.c will call it and create all threads
     LED_Init();
     uart_init(115200);
     systick_init(72, 10);
+
+    shell_printf_init();
 }
 
 
