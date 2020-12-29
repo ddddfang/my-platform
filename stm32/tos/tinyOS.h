@@ -19,7 +19,8 @@ typedef enum _tError {
     tErrorNoError = 0,      // 没有错误
     tErrorTimeout,          // 等待超时
     tErrorResourceUnavaliable,
-    tErrorDel
+    tErrorDel,
+    tErrorResourceFull
 } tError;
 
 typedef struct _tTask {
@@ -99,6 +100,7 @@ void tTaskSystemTickHandler (void);
 typedef enum  _tEventType {
     tEventTypeUnknown   = 0,    // 未知类型
     tEventTypeSem       = 1,    // 信号量类型
+    tEventTypeMbox  	= 2,    // 邮箱类型
 } tEventType;
 
 typedef struct _tEvent {    // Event控制结构
@@ -137,9 +139,35 @@ uint32_t tSemDestroy (tSem * sem);
 
 
 //--------------------------------------------------
-void tInitApp (void);
+#define tMBOXSendNormal             0x00        // 正常发送至缓冲区
+#define tMBOXSendFront              0x01        // 消息发送至缓冲区头部
 
-int tos_init (void);
-int tos_start (void);
+typedef struct _tMbox {
+    tEvent event;
+    uint32_t count;     // 当前的消息数量
+    uint32_t read;      // 读消息的索引
+    uint32_t write;     // 写消息的索引
+    uint32_t maxCount;  // 最大允许容纳的消息数量
+    void ** msgBuffer;  // 消息存储缓冲区
+} tMbox;
+
+typedef struct _tMboxInfo {
+    uint32_t count;     // 当前的消息数量
+    uint32_t maxCount;  // 最大允许容纳的消息数量
+    uint32_t taskCount; // 当前等待的任务计数
+} tMboxInfo;
+
+void tMboxInit (tMbox *mbox, void **msgBuffer, uint32_t maxCount);
+uint32_t tMboxWait (tMbox *mbox, void **msg, uint32_t waitTicks);
+uint32_t tMboxNoWaitGet (tMbox *mbox, void **msg);
+uint32_t tMboxNotify (tMbox *mbox, void *msg, uint32_t notifyOption);
+void tMboxFlush (tMbox *mbox);
+uint32_t tMboxDestroy (tMbox *mbox);
+void tMboxGetInfo (tMbox *mbox, tMboxInfo *info);
+
+//--------------------------------------------------
+void tInitApp (void);   //in app.c
+int tos_init (void);    //in tos.c
+int tos_start (void);   //in tos.c
 
 #endif /* TINYOS_H */

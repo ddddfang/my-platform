@@ -47,9 +47,10 @@ OBJS += common/tLibList.o
 #OBJS += $(patsubst %.c,%.o ,$(wildcard ./tos/*.s))
 OBJS += tos/switch.o
 OBJS += tos/tTask.o
-OBJS += tos/tEvent.o
 OBJS += tos/tTime.o
+OBJS += tos/tEvent.o
 OBJS += tos/tSem.o
+OBJS += tos/tMBox.o
 OBJS += tos/tos.o
 OBJS += tos/app.o
 

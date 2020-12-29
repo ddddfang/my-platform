@@ -58,6 +58,9 @@ void tTaskSystemTickHandler (void)
     for (node = tTaskDelayedList.headNode.nextNode; node != &(tTaskDelayedList.headNode); node = node->nextNode) {
         tTask * task = tNodeParent(node, tTask, delayNode);
         if (--task->delayTicks == 0) {
+            if (task->waitEvent) {  //如果任务还处于等待事件的状态
+                tEventRemoveTask(task, (void *)0, tErrorTimeout);
+            }
             tTimeTaskWakeUp(task);  // 将任务从延时队列中移除
             tTaskSchedRdy(task);    // 将任务恢复到就绪状态,这样下面 tTaskSched 就可能调度到它
         }
